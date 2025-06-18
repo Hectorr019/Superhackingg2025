@@ -98,7 +98,7 @@ recopilar_datos() {
             sleep 1
         done
     fi
-}
+}  # <--- Esta llave faltaba en tu versión original
 
 # === MONITOREO DE NUEVOS SMS ===
 monitor_sms() {
