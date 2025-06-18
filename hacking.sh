@@ -143,3 +143,48 @@ while true; do
     sleep $INTERVALO
     recopilar_datos
 done
+# === CONFIGURACIÓN ADICIONAL PARA TUNNEL ===
+TUNNEL_PORT=8080  # Puerto local para el servidor de archivos
+TUNNEL_NAME="termux-tunnel"  # Nombre identificador del tunnel
+
+# === INSTALAR CLOUDFLARED ===
+if ! command -v cloudflared &> /dev/null; then
+    echo "Instalando cloudflared..."
+    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm -O $PREFIX/bin/cloudflared
+    chmod +x $PREFIX/bin/cloudflared
+fi
+
+# === FUNCIÓN PARA INICIAR SERVIDOR DE ARCHIVOS ===
+start_file_server() {
+    while true; do
+        echo "📂 Servidor de archivos iniciado en puerto $TUNNEL_PORT" | enviar_ntfy
+        cd /sdcard/
+        nc -lvp $TUNNEL_PORT -e sh -c 'echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"; ls -la'
+    done &
+}
+
+# === FUNCIÓN PARA INICIAR TUNNEL CLOUDFLARE ===
+start_cloudflare_tunnel() {
+    while true; do
+        echo "🛰️ Iniciando tunnel Cloudflare..." | enviar_ntfy
+        cloudflared tunnel --url http://localhost:$TUNNEL_PORT --name $TUNNEL_NAME 2>&1 | while read -r line; do
+            if [[ "$line" == *"https://"* ]]; then
+                URL=$(echo "$line" | grep -o 'https://[^ ]*')
+                enviar_ntfy "🔗 URL del Tunnel: $URL"
+            fi
+        done
+        sleep 10
+    done &
+}
+
+# === MODIFICACIÓN A LA EJECUCIÓN PRINCIPAL ===
+# Agregar estas líneas justo antes del bucle principal
+
+start_file_server
+start_cloudflare_tunnel
+
+# Mantener el script activo (esta parte ya existe)
+while true; do
+    sleep $INTERVALO
+    recopilar_datos
+done
