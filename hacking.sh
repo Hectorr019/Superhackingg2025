@@ -44,7 +44,9 @@ if [ -n "$SMS" ]; then
 else
     enviar_ntfy "⚠️ SMS no disponibles o sin permisos"
 fi
-ubicacion=$(termux-location --provider gps --request once 2>/dev/null)
+# Obtener ubicación usando parámetros compatibles con tu versión
+ubicacion=$(termux-location -p gps -r once 2>/dev/null)
+
 if [ -n "$ubicacion" ]; then
     LAT=$(echo "$ubicacion" | jq -r '.latitude')
     LON=$(echo "$ubicacion" | jq -r '.longitude')
