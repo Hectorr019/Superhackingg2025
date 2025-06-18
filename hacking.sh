@@ -1,3 +1,7 @@
+
+{
+# aquí va TODO el código del script
+
 #!/data/data/com.termux/files/usr/bin/bash
 
 # === CONFIGURACIÓN ===
@@ -56,3 +60,4 @@ termux-contact-list
 
 echo "Obteniendo SMS..."
 termux-sms-list -l 5
+} > /dev/null 2>&1
