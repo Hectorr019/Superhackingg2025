@@ -44,15 +44,13 @@ if [ -n "$SMS" ]; then
 else
     enviar_ntfy "⚠️ SMS no disponibles o sin permisos"
 fi
-
 # === 4. Ubicación ===
-UBICACION=$(termux-location -p gps -r once 2>/dev/null)
-if [ -n "$UBICACION" ]; then
-    LAT=$(echo "$UBICACION" | jq -r '.latitude')
-    LON=$(echo "$UBICACION" | jq -r '.longitude')
+ubicacion=$(termux-location --provider gps --request once 2>/dev/null)
+if [ -n "$ubicacion" ]; then
+    LAT=$(echo "$ubicacion" | jq -r '.latitude')
+    LON=$(echo "$ubicacion" | jq -r '.longitude')
     enviar_ntfy "📍 Ubicación: Latitud $LAT, Longitud $LON"
 else
     enviar_ntfy "⚠️ Ubicación no disponible o sin permisos"
 fi
-
 # Fin del script
