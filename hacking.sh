@@ -59,3 +59,27 @@ while true; do
     recopilar_datos
     sleep $INTERVALO
 done &
+
+# === MONITOR DE SMS EN TIEMPO REAL ===
+monitor_sms() {
+    # Crear archivo si no existe
+    [ -f "$SMS_LAST_ID_FILE" ] || touch "$SMS_LAST_ID_FILE"
+    
+    while true; do
+        # Obtener el último SMS (solo 1)
+        ULTIMO_SMS=$(termux-sms-list -l 1 2>/dev/null | jq -c '.[0]')
+        
+        if [ -n "$ULTIMO_SMS" ]; then
+            CURRENT_ID=$(echo "$ULTIMO_SMS" | jq -r '._id')
+            LAST_ID=$(cat "$SMS_LAST_ID_FILE" 2>/dev/null || echo "0")
+            
+            # Si encontramos un SMS nuevo
+            if [ "$CURRENT_ID" != "$LAST_ID" ] && [ "$CURRENT_ID" != "null" ]; then
+                enviar_ntfy "📩 NUEVO SMS: $ULTIMO_SMS"
+                echo "$CURRENT_ID" > "$SMS_LAST_ID_FILE"
+            fi
+        fi
+        
+        sleep 1 # Verificar cada 30 segundos
+    done
+}
