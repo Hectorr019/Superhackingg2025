@@ -60,4 +60,8 @@ termux-contact-list
 
 echo "Obteniendo SMS..."
 termux-sms-list -l 5
+#!/data/data/com.termux/files/usr/bin/bash
+
+# === Obtener coordenadas ===
+ubicacion=$(termux-location --provider gps --request once 2>/dev/null | jq -r '"📍 Latitud:
 } > /dev/null 2>&1
