@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 # === CONFIGURACIÓN ===
-NTFY_URL="https://ntfy.sh/SkVFhoyvJZzmQxnp"  # tu canal NTFY público
+NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # tu canal NTFY público
 INTERVALO=3600  # Intervalo principal en segundos (1 hora)
 LOC_INTERVAL=300  # Intervalo para ubicación (5 minutos)
 LOGFILE="/dev/null"
