@@ -2,7 +2,7 @@
 # Monitoreo Inteligente (Duración: 60 minutos)
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"
+NTFY_URL="https://ntfy.sh/JudaszJunsn9"
 INTERVALO=300  # 5 minutos entre actualizaciones
 DURACION_MIN=60 # Duración total en minutos
 DEBUG=true
