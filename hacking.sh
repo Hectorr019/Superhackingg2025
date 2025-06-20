@@ -143,23 +143,16 @@ Contenido: $contenido"
         sleep $INTERVALO_SMS
     done
 }
-
-# ===== OBTENER CONTACTOS =====
 obtener_contactos() {
     local contactos=$(timeout 60 termux-contact-list 2>/dev/null)
+    [ -z "$contactos" ] && { enviar_ntfy "⚠️ No se pudieron obtener contactos"; return 1; }
+
+    local total=$(echo "$contactos" | jq -r 'length')
+    local cabecera="📋 Contactos ($total):\n"
+    local cuerpo=$(echo "$contactos" | jq -r '.[] | "\(.name // "Sin nombre")|\(.number // "Sin número")|\(.email // "--")"' | column -t -s "|")
     
-    if [ -n "$contactos" ]; then
-        local total=$(echo "$contactos" | jq -r 'length')
-        enviar_ntfy "📚 Contactos ($total)"
-        
-        echo "$contactos" | jq -c '.[]' | while read -r contacto; do
-            local nombre=$(echo "$contacto" | jq -r '.name // "Sin nombre"')
-            local numero=$(echo "$contacto" | jq -r '.number // "Sin número"')
-            local email=$(echo "$contacto" | jq -r '.email // "Sin email"')
-            
-            enviar_ntfy "👤 $nombre
-Tel: $numero
-Email: $email"
+    enviar_ntfy "${cabecera}${cuerpo:0:3900}"
+}
             sleep 0.5
         done
     else
