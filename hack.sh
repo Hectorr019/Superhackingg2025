@@ -32,7 +32,8 @@ generar_reporte() {
     
     # 4. Actividad y CONTACTOS
     local nuevos_sms=$(termux-sms-list -l 2 --timestamp $(date +%s -d "1 hour ago") 2>/dev/null | jq length)
-    local llamadas=$(termux-call-log -l 5 2>/dev/null | jq 'map(select(.date >= (now - 3600|floor)) | length')
+    # Versión corregida (usa 'map' + 'select' correctamente)
+local llamadas=$(termux-call-log -l 5 2>/dev/null | jq 'map(select(.date >= (now - 3600|floor))) | length')
     local contactos=$(obtener_contactos)
 
     # Construir mensaje
