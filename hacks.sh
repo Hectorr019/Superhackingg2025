@@ -2,7 +2,7 @@
 # Monitoreo Avanzado (Duración: 60 minutos)
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/jotape09"  # ¡Cámbialo!
+NTFY_URL="https://ntfy.sh/rotape009"  # ¡Cámbialo!
 INTERVALO=300  # 5 minutos entre reportes (para evitar saturación)
 DURACION_MIN=60
 DEBUG=true
