@@ -1,8 +1,9 @@
-#!/bin/bash
+U
+0#!/bin/bash
 # Monitoreo Avanzado (Duración: 60 minutos)
 
 # ===== CONFIGURACIÓN =====
-NTFY_URL="https://ntfy.sh/rotape009"  # ¡Cámbialo!
+NTFY_URL="https://ntfy.sh/pe9278301"  # ¡Cámbialo!
 INTERVALO=300  # 5 minutos entre reportes (para evitar saturación)
 DURACION_MIN=60
 DEBUG=true
